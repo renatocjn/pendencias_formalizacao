@@ -7,8 +7,7 @@ git_source(:github) {|repo_name| "https://github.com/#{repo_name}" }
 # gem "rails"
 
 group :development do
-  gem 'puck'
-  gem 'jruby-jars', '= 1.7.18'
+  gem "warbler", :require => false
 end
 
 gem 'clipboard'
