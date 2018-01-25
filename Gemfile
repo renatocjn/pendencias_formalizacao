@@ -10,11 +10,12 @@ group :development do
   gem 'ocra'
 end
 
-gem 'shoes'
+gem "ffi"
+gem "clipboard"
 
-gem 'clipboard'
+gem "roo"
+gem "roo-xls"
 
-gem 'roo'
-gem 'roo-xls'
+gem "tiny_tds"
 
-gem 'jdbc-mysql'
+gem "fxruby"

@@ -2,7 +2,12 @@ GEM
   remote: https://rubygems.org/
   specs:
     clipboard (1.1.1)
-    jdbc-mysql (5.1.44)
+    ffi (1.9.18-java)
+    ffi (1.9.18-x64-mingw32)
+    fxruby (1.6.39)
+      mini_portile2 (~> 2.1)
+    fxruby (1.6.39-x64-mingw32)
+      mini_portile2 (~> 2.1)
     mini_portile2 (2.3.0)
     nokogiri (1.8.1-java)
     nokogiri (1.8.1-x64-mingw32)
@@ -17,9 +22,10 @@ GEM
       spreadsheet (> 0.9.0)
     ruby-ole (1.2.12.1)
     rubyzip (1.2.1)
-    shoes (3.0.1)
     spreadsheet (1.1.5)
       ruby-ole (>= 1.0)
+    tiny_tds (2.1.1)
+    tiny_tds (2.1.1-x64-mingw32)
 
 PLATFORMS
   java
@@ -27,11 +33,12 @@ PLATFORMS
 
 DEPENDENCIES
   clipboard
-  jdbc-mysql
+  ffi (~> 1.9)
+  fxruby (~> 1.6)
   ocra
   roo
   roo-xls
-  shoes
+  tiny_tds
 
 BUNDLED WITH
    1.16.1

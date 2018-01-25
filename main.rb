@@ -18,13 +18,14 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     #Controls on top
     controls = FXVerticalFrame.new(self, LAYOUT_SIDE_TOP|LAYOUT_FILL_X,
       padLeft: 40, padRight: 40, padTop: 10, padBottom: 10)
-	  
+	
     controlGroup = FXGroupBox.new(controls, "Selecione o banco sendo processado", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
     optionsPopup = FXPopup.new(controlGroup)
-    ["Detecção automática", "BMG", "Bradesco", "Santander"].each { |opt| FXOption.new(optionsPopup, opt) }
+    ["Detecção automática", "BMG", "Bradesco", "Santander", "Itaú", "OLÉ", "HELP"].each { |opt| FXOption.new(optionsPopup, opt) }
     @bank_select = FXOptionMenu.new controlGroup, optionsPopup, opts: FRAME_RAISED|FRAME_THICK|ICON_BEFORE_TEXT|LAYOUT_FILL_X
     
     controlGroup = FXGroupBox.new(controls, "Selecione a planilha a ser processada", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
+	progress_keeper = FXProgressBar.new(controlGroup, opts: PROGRESSBAR_NORMAL|PROGRESSBAR_HORIZONTAL|LAYOUT_FILL_X|LAYOUT_SIDE_BOTTOM|PROGRESSBAR_PERCENTAGE)
     FXButton.new(controlGroup, "Selecionar planilha", opts: LAYOUT_FILL_X|FRAME_THICK|FRAME_RAISED|BUTTON_DEFAULT).connect(SEL_COMMAND) do  
       dialog = FXFileDialog.new(self, "Selecione a planilha de pendencias")  
       dialog.selectMode = SELECTFILE_EXISTING
@@ -32,30 +33,28 @@ class ProcessadorDePendenciasGUI < FXMainWindow
       
       if dialog.execute != 0
         begin
-          processedProposals = recoverProposalNumbersAndStateOfProposals(dialog.filename, @bank_select.current)
+          processedProposals, failedProposals = recoverProposalNumbersAndStateOfProposals(dialog.filename, @bank_select.current.to_s, progress_keeper)
+		  FXMessageBox::warning self, MBOX_OK, "Algo deu errado...", "As seguintes propostas não puderam ser localizadas:\n" + failedProposals.join("\n")
           insertProcessedProposalsToTable processedProposals
+		  progress_keeper.progress = 0
         rescue RuntimeError => err
           FXMessageBox::error self, MBOX_OK, "Algo deu errado...", err.message
         end
       end  
     end
     
-    FXHorizontalSeparator.new(self,
-        LAYOUT_SIDE_TOP|LAYOUT_FILL_X|SEPARATOR_GROOVE)
-    
-    # Status bar
+    #FXHorizontalSeparator.new(self, LAYOUT_SIDE_TOP|LAYOUT_FILL_X|SEPARATOR_GROOVE)
+	
     FXLabel.new(self, "contato: helpdesk@casebras.com.br", opts: JUSTIFY_RIGHT|LAYOUT_SIDE_BOTTOM)
-    
-    FXHorizontalSeparator.new(self,
-        LAYOUT_SIDE_BOTTOM|LAYOUT_FILL_X|SEPARATOR_GROOVE)
-    
+	FXHorizontalSeparator.new(self, LAYOUT_SIDE_BOTTOM|LAYOUT_FILL_X|SEPARATOR_GROOVE)
+	
     footer = FXVerticalFrame.new(self, LAYOUT_SIDE_BOTTOM|LAYOUT_FILL_X,
       padLeft: 40, padRight: 40, padTop: 10, padBottom: 10)
      
     FXButton.new(footer, "Copiar para área de transferência", opts: LAYOUT_SIDE_BOTTOM|FRAME_RAISED|FRAME_THICK|LAYOUT_FILL_X).connect(SEL_COMMAND) do 
-      xmlFriendlyContent = String.new
-      @table.numRows.times { |r| xmlFriendlyContent += "#{@table.getItemText(r,0)}\t#{@table.getItemText(r,1)}\n" }
-      Clipboard.copy xmlFriendlyContent
+      excelFriendlyContent = String.new
+      @table.numRows.times { |r| excelFriendlyContent += "#{@table.getItemText(r,0)}\t#{@table.getItemText(r,1)}\n" }
+      Clipboard.copy excelFriendlyContent
     end
     
     # Contents

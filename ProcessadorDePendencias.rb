@@ -1,74 +1,112 @@
+class String
+  def is_integer?
+    self =~ /^[-+]?[1-9]([0-9]*)?$/
+  end
+end
+
 module ProcessadorDePendencias
-	#require 'java'
-	require 'rubygems'
-	require 'jdbc/mysql'
-    #Jdbc::MySQL.load_driver
-	#java_import "com.mysql.jdbc.Driver"
+	require 'tiny_tds'
 
 	BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS = {
-		"teste" => 'E'
+		"teste" => 'E',
+		"help" => 'E',
+		"ole" => 'H',
+		"itau" => 'I'
 	}
 	
-	def acquireListOfProposals(file, bank)
-		puts "acquireListOfProposals '#{file}', '#{bank}'"
-		
+	def getSpreadSheetColumn filename, bank
+		bank_keys = BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS.keys
+		bank.downcase!
+		if bank_keys.include? bank
+			return BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS[bank]
+		else
+			file_basename = File.basename(filename).downcase
+			bank_keys.each do |k|
+				if file_basename.include? k 
+					return BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS[k]
+				end
+			end
+		end
+		raise "O banco desta planilha não pôde ser encontrado"
+	end
+	
+	def acquireListOfProposals file, bank
 		if file.end_with?("xls")
 			require "roo-xls"
 		else
 			require "roo"
 		end
+		
 		spreadsheet =  Roo::Spreadsheet.open(file)
+		column_number = getSpreadSheetColumn file, bank
+		#puts "Column #{column_number}"
 		
-		puts "column_number = '#{BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS[bank]}'"
-		column_number = BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS[bank]
-		
-		spreadsheet.column(column_number)
+		spreadsheet.column(column_number).select {|v| v.is_a?(Integer) or v.is_a?(Float) or v.is_integer?}
 	end
 	
 	def createDatabaseConnection
-		puts "createDatabaseConnection"
+		#puts "createDatabaseConnection"
 		
 		database_url = ""
-		puts "database_url = '#{database_url}'"
+		#puts "database_url = '#{database_url}'"
 		
 		database_name = ""
-		puts "database_name = '#{database_name}'"
+		#puts "database_name = '#{database_name}'"
 		
 		user_login = ""
-		puts "user_login = '#{user_login}'"
+		#puts "user_login = '#{user_login}'"
 		
 		user_passwd = ""
-		puts "user_passwd = '#{user_passwd}'"
+		#puts "user_passwd = '#{user_passwd}'"
 		
-		#con = Mysql.new(database_url, user_login, user_passwd, database_name)
-		#begin
-		#	con = java.sql.DriverManager.getConnection(
-		#		"jdbc:mysql://#{database_url}/#{database_name}", 
-		#		user_login, user_passwd
-		#)
-		#rescue
-		#	abort "Failed to connect to database"
-		#end
-		#puts "Connection #{con.inspect}"
-		#return con
-		return nil
+		begin
+			TinyTds::Client.new username: user_login, password: user_passwd, host: database_url, database: database_name
+		rescue TinyTds::Error => err
+			raise "falha ao se conectar ao banco"
+		end 
 	end
 	
-	def findResponsableForEachProposal(proposals)
-		con = createDatabaseConnection
-		
-		proposals.collect do |proposal_number|
-			next unless proposal_number.is_a? Float or proposal_number.is_a? Integer
-			
-			uf = true
-			raise "Failed to find UF for proposal #{proposal_number}" unless uf
-			[proposal_number, uf]
+	def getSQL proposal
+		"SELECT UE.SGL_UNIDADE_EMPRESA, UE.SGL_UNIDADE_FEDERACAO, UE.NOM_UNIDADE_EMPRESA, UE.NOM_FANTASIA
+			FROM [CBDATA].[dbo].[PROPOSTA_EMPRESTIMO] AS PE
+				INNER JOIN [CBDATA].[dbo].[UNIDADE_EMPRESA] AS UE ON UE.COD_UNIDADE_EMPRESA = PE.COD_UNIDADE_EMPRESA
+			WHERE PE.NUM_PROPOSTA = '#{proposal}' OR PE.NUM_CONTRATO = '#{proposal}'"
+	end
+	
+	def queryDatabaseForUfOfProposal con, proposal
+		sql = getSQL proposal
+		result = con.execute sql
+		row = result.first
+		if row.nil?
+			puts proposal
+			nil
+		else
+			uf = row["SGL_UNIDADE_EMPRESA"]
+			uf = uf.nil? ? row["SGL_UNIDADE_FEDERACAO"] : uf
+			uf = uf.nil? ? row["NOM_UNIDADE_EMPRESA"] : uf
+			uf = uf.nil? ? row["NOM_FANTASIA"] : uf
 		end
 	end
 	
-	def recoverProposalNumbersAndStateOfProposals(file, bank)
-		proposals = acquireListOfProposals file, "teste"
-		findResponsableForEachProposal proposals
+	def findUfOfEachProposal(proposals, progress_keeper=nil)
+		con = createDatabaseConnection
+		raise "Não foi possível acessar o banco de dados" unless con
+		failed_proposals = Array.new
+		response = proposals.collect do |proposal_number|
+			uf = queryDatabaseForUfOfProposal con, proposal_number
+			failed_proposals << proposal_number unless uf
+			progress_keeper.progress += 1 unless progress_keeper.nil?
+			[proposal_number, uf]
+		end
+		con.close
+		return response, failed_proposals
+	end
+	
+	def recoverProposalNumbersAndStateOfProposals(file, bank, progress_keeper=nil)
+		proposals = acquireListOfProposals file, bank
+		if proposals.empty? then raise "Nenhuma proposta localizada" end
+		progress_keeper.total = proposals.length unless progress_keeper.nil?
+		findUfOfEachProposal proposals, progress_keeper
 	end
 end
 
