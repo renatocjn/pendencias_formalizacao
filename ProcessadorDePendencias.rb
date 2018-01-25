@@ -86,17 +86,22 @@ module ProcessadorDePendencias
   end
   
   def findUfOfEachProposal(proposals, progress_keeper=nil)
+    puts proposals.length
     con = createDatabaseConnection
     raise "Não foi possível acessar o banco de dados" unless con
     failed_proposals = Array.new
     response = proposals.collect do |proposal_number|
       uf = queryDatabaseForUfOfProposal con, proposal_number
-      failed_proposals << proposal_number unless uf
       progress_keeper.progress += 1 unless progress_keeper.nil?
-      [proposal_number, uf]
+      if uf.nil?
+        failed_proposals << proposal_number unless uf
+        next
+      else
+        [proposal_number, uf]
+      end      
     end
     con.close
-    return response, failed_proposals
+    return response.reject {|v| v.nil?}, failed_proposals
   end
   
   def recoverProposalNumbersAndStateOfProposals(file, bank, progress_keeper=nil)
