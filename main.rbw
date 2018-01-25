@@ -68,7 +68,7 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     @table.visibleColumns = 2
     @table.setTableSize(10, 2)
     @table.editable = false
-    @table.setColumnText(0, "Propostas")
+    @table.setColumnText(0, "Proposta")
     @table.setColumnText(1, "UF")
     @table.setItemJustify(0, 0, FXTableItem::CENTER_X|FXTableItem::CENTER_Y)
     @table.setItemJustify(0, 1, FXTableItem::CENTER_X|FXTableItem::CENTER_Y)
@@ -85,7 +85,7 @@ class ProcessadorDePendenciasGUI < FXMainWindow
   else
     @table.setTableSize(0,2)
   end
-    @table.setColumnText(0, "Propostas")
+    @table.setColumnText(0, "Proposta")
     @table.setColumnText(1, "UF")
     processedProposals.each do |proposal, uf|
       @table.insertRows(0)
