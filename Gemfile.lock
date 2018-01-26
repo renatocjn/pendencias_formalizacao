@@ -8,6 +8,7 @@ GEM
       mini_portile2 (~> 2.1)
     fxruby (1.6.39-x64-mingw32)
       mini_portile2 (~> 2.1)
+    logger (1.2.8)
     mini_portile2 (2.3.0)
     nokogiri (1.8.1-java)
     nokogiri (1.8.1-x64-mingw32)
@@ -24,6 +25,7 @@ GEM
     rubyzip (1.2.1)
     spreadsheet (1.1.5)
       ruby-ole (>= 1.0)
+    thread (0.2.2)
     tiny_tds (2.1.1)
     tiny_tds (2.1.1-x64-mingw32)
 
@@ -33,11 +35,13 @@ PLATFORMS
 
 DEPENDENCIES
   clipboard
-  ffi (~> 1.9)
-  fxruby (~> 1.6)
+  ffi
+  fxruby
+  logger
   ocra
   roo
   roo-xls
+  thread
   tiny_tds
 
 BUNDLED WITH

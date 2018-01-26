@@ -51,3 +51,4 @@ build-iPhoneSimulator/
 *.class
 *.jar
 *.exe
+*.log

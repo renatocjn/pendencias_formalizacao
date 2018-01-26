@@ -19,3 +19,7 @@ gem "roo-xls"
 gem "tiny_tds"
 
 gem "fxruby"
+
+gem "thread"
+
+gem "logger"
