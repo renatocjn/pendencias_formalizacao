@@ -2,6 +2,9 @@ GEM
   remote: https://rubygems.org/
   specs:
     clipboard (1.1.1)
+    concurrent-ruby (1.0.5)
+    concurrent-ruby (1.0.5-java)
+    connection_pool (2.2.1)
     ffi (1.9.18-java)
     ffi (1.9.18-x64-mingw32)
     fxruby (1.6.39)
@@ -35,6 +38,8 @@ PLATFORMS
 
 DEPENDENCIES
   clipboard
+  concurrent-ruby (~> 1.0)
+  connection_pool
   ffi
   fxruby
   logger

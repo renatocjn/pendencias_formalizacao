@@ -24,7 +24,7 @@ class ProcessadorDePendenciasGUI < FXMainWindow
   
     controlGroup = FXGroupBox.new(controls, "Selecione o banco sendo processado", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
     optionsPopup = FXPopup.new(controlGroup)
-    ["Detecção automática", "Itaú", "OLÉ", "HELP"].each { |opt| FXOption.new(optionsPopup, opt) }
+    ["Detecção automática", "Itaú", "OLÉ", "HELP", "INTERMED EMPREST", "INTERMED CARD", "Daycoval", "Centelem", "Bradesco", "CCB", "Bons", "Safra", "Sabemi", "PAN Consignado", "PAN Cartão", "Banrisul"].each { |opt| FXOption.new(optionsPopup, opt) }
     @bank_select = FXOptionMenu.new controlGroup, optionsPopup, opts: FRAME_THICK|FRAME_RAISED|ICON_BEFORE_TEXT|LAYOUT_FILL_X
     
     controlGroup = FXGroupBox.new(controls, "Selecione a planilha a ser processada", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
@@ -54,13 +54,12 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     
     #@table.borderColor = FXRGB(255, 255, 255)
     @table.visibleRows = 5
-    @table.visibleColumns = 2
-    @table.setTableSize(10, 2)
+    @table.visibleColumns = 3
+    @table.setTableSize 10, 3
     @table.editable = false
-    @table.setColumnText(0, "Proposta")
-    @table.setColumnText(1, "UF")
-    @table.setItemJustify(0, 0, FXTableItem::CENTER_X|FXTableItem::CENTER_Y)
-    @table.setItemJustify(0, 1, FXTableItem::CENTER_X|FXTableItem::CENTER_Y)
+    @table.setColumnText 0, "Proposta"
+    @table.setColumnText 1, "UF"
+    @table.setColumnText 2, "Digitador"
   end
   
   def create
@@ -70,16 +69,18 @@ class ProcessadorDePendenciasGUI < FXMainWindow
   
   def insertProcessedProposalsToTable (processedProposals)
   if processedProposals.empty?
-    @table.setTableSize(1,2)
+    @table.setTableSize 1,3 
   else
-    @table.setTableSize(0,2)
+    @table.setTableSize 0,3 
   end
-    @table.setColumnText(0, "Proposta")
-    @table.setColumnText(1, "UF")
-    processedProposals.each do |proposal, uf|
+    @table.setColumnText 0, "Proposta"
+    @table.setColumnText 1, "UF"
+    @table.setColumnText 2, "Digitador"
+    processedProposals.each do |proposal, uf, typer|
       @table.insertRows(0)
-      @table.setItemText(0,0, Integer(proposal).to_s)
-      @table.setItemText(0,1, uf.to_s)
+      @table.setItemText(0,0, proposal)
+      @table.setItemText(0,1, uf)
+      @table.setItemText(0,2, typer)
   end
   end
   
@@ -89,20 +90,27 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     end
     @selectSpreadsheetBttn.text = "Aguarde..."
     @processThread = Thread.new(self) do |window|
+      Thread::abort_on_exception = true
       begin
+        puts "Starting main process thread"
         processedProposals, failedProposals = recoverProposalNumbersAndStateOfProposals(filename, @bank_select.current.to_s, @progress_keeper)
-        #failedProposalsMessage = "As seguintes propostas não puderam ser localizadas:\n\n" + failedProposals.each_slice(4).collect{|s| s.join("       ")}.join("\n")
-        #window.showWarning failedProposalsMessage
-        failedProposalsMessage = "As seguintes propostas não puderam ser localizadas: " + failedProposals.join(", ")
-        @logger.info failedProposalsMessage
+        puts "Done processing proposals, proposals found: #{processedProposals.length}, failed proposals: #{failedProposals.length}"
+        unless failedProposals.empty?
+          #failedProposalsMessage = "As seguintes propostas não puderam ser localizadas:\n\n" + failedProposals.each_slice(4).collect{|s| s.join("       ")}.join("\n")
+          #window.showWarning failedProposalsMessage
+          failedProposalsMessage = "As seguintes propostas não puderam ser localizadas: " + failedProposals.join(", ")
+          @logger.info failedProposalsMessage
+        end
         insertProcessedProposalsToTable processedProposals
-      rescue RuntimeError => err_msg
-        @logger.error err_msg
-        #window.showError err_msg
+      #rescue RuntimeError => err
+        #window.showError err.message
+      rescue Exception => exception
+        @logger.error exception
+        raise exception
       ensure
         setupSelectSpreadsheetBttn
-        @progress_keeper.progress = 0
-        @progress_keeper.total = 0
+        @progress_keeper.progress = @progress_keeper.total = 0
+        puts "Main thread finished"
       end
     end
   end

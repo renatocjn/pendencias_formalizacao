@@ -23,3 +23,8 @@ gem "fxruby"
 gem "thread"
 
 gem "logger"
+
+gem "connection_pool"
+
+# Added at 2018-01-29 10:36:04 -0300 by casebras\renato.neto:
+gem "concurrent-ruby", "~> 1.0"
