@@ -52,11 +52,10 @@ module ProcessadorDePendencias
   end
   
   def createDatabaseConnection
-    
     begin
       TinyTds::Client.new username: user_login, password: user_passwd, host: database_url, database: database_name
     rescue TinyTds::Error => err
-      raise "Falha ao se conectar ao banco"
+      raise "Falha ao se conectar ao banco: " + err
     end 
   end
   

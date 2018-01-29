@@ -91,14 +91,14 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     @processThread = Thread.new(self) do |window|
       begin
         processedProposals, failedProposals = recoverProposalNumbersAndStateOfProposals(filename, @bank_select.current.to_s, @progress_keeper)
-        failedProposalsMessage = "As seguintes propostas não puderam ser localizadas:\n\n" + failedProposals.each_slice(4).collect{|s| s.join("       ")}.join("\n")
-        #failedProposalsMessage = "As seguintes propostas não puderam ser localizadas: " + failedProposals.join(", ")
+        #failedProposalsMessage = "As seguintes propostas não puderam ser localizadas:\n\n" + failedProposals.each_slice(4).collect{|s| s.join("       ")}.join("\n")
+        #window.showWarning failedProposalsMessage
+        failedProposalsMessage = "As seguintes propostas não puderam ser localizadas: " + failedProposals.join(", ")
         @logger.info failedProposalsMessage
-        window.showWarning failedProposalsMessage
         insertProcessedProposalsToTable processedProposals
       rescue RuntimeError => err_msg
         @logger.error err_msg
-        window.showError err_msg
+        #window.showError err_msg
       ensure
         setupSelectSpreadsheetBttn
         @progress_keeper.progress = 0
