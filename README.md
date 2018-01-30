@@ -11,7 +11,7 @@ Com estes instalados, basta clicar duas vezes no arquivo .rbw para que a tela pr
 
 ## Instalação
 
-1. Instalar o ruby na máquina. Recomendo utilizar o [ruby installer] (https://rubyinstaller.org/downloads/) na versão 2.4.X 64 bits
+1. Instalar o ruby na máquina. Recomendo utilizar o [ruby installer](https://rubyinstaller.org/downloads/) na versão 2.4.X 64 bits
 
 2. Abrir o terminal e executar os seguintes comandos na pasta que contém estes arquivos:
 
