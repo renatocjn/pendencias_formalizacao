@@ -3,7 +3,7 @@
 require 'fox16'
 require 'Clipboard'
 require 'logger'
-require_relative "ProcessadorDePendenciasWithThreads"
+require_relative "ProcessadorDePendencias"
 include Fox
 
 class ProcessadorDePendenciasGUI < FXMainWindow
@@ -24,7 +24,7 @@ class ProcessadorDePendenciasGUI < FXMainWindow
   
     controlGroup = FXGroupBox.new(controls, "Selecione o banco sendo processado", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
     optionsPopup = FXPopup.new(controlGroup)
-    ["Detecção automática", "Itaú", "OLÉ", "HELP", "INTERMED EMPREST", "INTERMED CARD", "Daycoval", "Centelem", "Bradesco", "CCB", "Bons", "Safra", "Sabemi", "PAN Consignado", "PAN Cartão", "Banrisul"].each { |opt| FXOption.new(optionsPopup, opt) }
+    ["Detecção automática", "Itaú", "OLÉ", "HELP", "INTERMED EMPREST", "INTERMED CART", "Daycoval", "Centelem", "Bradesco", "CCB", "Bons", "Safra", "Sabemi", "PAN Consignado", "PAN Cartão", "Banrisul"].each { |opt| FXOption.new(optionsPopup, opt) }
     @bank_select = FXOptionMenu.new controlGroup, optionsPopup, opts: FRAME_THICK|FRAME_RAISED|ICON_BEFORE_TEXT|LAYOUT_FILL_X
     
     controlGroup = FXGroupBox.new(controls, "Selecione a planilha a ser processada", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
@@ -42,7 +42,7 @@ class ProcessadorDePendenciasGUI < FXMainWindow
      
     FXButton.new(footer, "Copiar para área de transferência", opts: LAYOUT_SIDE_BOTTOM|FRAME_THICK|FRAME_RIDGE|LAYOUT_FILL_X).connect(SEL_COMMAND) do 
       excelFriendlyContent = String.new
-      @table.numRows.times { |r| excelFriendlyContent += "#{@table.getItemText(r,0)}\t#{@table.getItemText(r,1)}\n" }
+      @table.numRows.times { |r| excelFriendlyContent += "#{@table.getItemText(r,0)}\t#{@table.getItemText(r,1)}\t#{@table.getItemText(r,2)}\n" }
       Clipboard.copy excelFriendlyContent
     end
     
@@ -78,9 +78,9 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     @table.setColumnText 2, "Digitador"
     processedProposals.each do |proposal, uf, typer|
       @table.insertRows(0)
-      @table.setItemText(0,0, proposal)
-      @table.setItemText(0,1, uf)
-      @table.setItemText(0,2, typer)
+      @table.setItemText(0,0, proposal.to_s)
+      @table.setItemText(0,1, uf.to_s)
+      @table.setItemText(0,2, typer.to_s)
   end
   end
   

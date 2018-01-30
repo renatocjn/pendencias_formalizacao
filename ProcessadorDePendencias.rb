@@ -11,12 +11,27 @@ end
 
 module ProcessadorDePendencias
   require 'tiny_tds'
-    
+  require 'concurrent'
+  require 'connection_pool'
+  
   BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS = {
-    "teste" => 'E',
-    "help" => 'E',
-    "ole" => 'H',
-    "itau" => 'I'
+   #"bank_name"  => ["proposal_column", "typer_column"],
+    "teste" => ["E", "F"],
+    "help"  => ["E", "J"],
+    "ole"   => ["H", "D"],
+    "itau"  => ["I", "E"],
+    "intermed emprest" => ["A", "N"],
+    "intermed cart" => ["A", "M"],
+    "daycoval" => ["T", "S"],
+    #"centelem" => ["", ""],
+    #"ccb" => ["", ""],
+    "bradesco" => ["A", "J"],
+    "bons" => ["D", "A"],
+    "safra" => ["B", "S"],
+    "sabemi" => ["C", "A"],
+    "pan consignado" => ["A", "Q"],
+    #"banrisul" => ["", ""],
+    "pan cartao" => ["A", "P"]
   }
   
   def getSpreadSheetColumn filename, bank
@@ -43,20 +58,19 @@ module ProcessadorDePendencias
     end
     
     spreadsheet =  Roo::Spreadsheet.open(file)
-    column_number = getSpreadSheetColumn file, bank
+    proposals_column_number, typer_column_number = getSpreadSheetColumn file, bank
     
-    
-    #puts spreadsheet.column(column_number)
-    #raise "teste"
-    spreadsheet.column(column_number).reject {|v| v.nil?}.select {|v| v.is_a?(Integer) or v.is_a?(Float) or v.is_integer?}
+    proposals = spreadsheet.column(proposals_column_number)
+    typers = spreadsheet.column(typer_column_number)
+    columns = proposals.zip(typers)
+    columns.reject {|p, t| p.nil?}.select {|p, t| p.is_a?(Integer) or p.is_a?(Float) or p.is_integer?}.collect {|p, t| p.is_a?(Float) ? [Integer(p), t] : [p, t]}
   end
   
   def createDatabaseConnection
-    
     begin
-      TinyTds::Client.new username: user_login, password: user_passwd, host: database_url, database: database_name
+      TinyTds::Client.new username: user_login, password: user_passwd, host: database_url, database: database_name, timeout: 10*60
     rescue TinyTds::Error => err
-      raise "Falha ao se conectar ao banco"
+      raise "Falha ao se conectar ao banco: " + err.message
     end 
   end
   
@@ -67,10 +81,12 @@ module ProcessadorDePendencias
       WHERE PE.NUM_PROPOSTA = '#{proposal}' OR PE.NUM_CONTRATO = '#{proposal}'"
   end
   
-  def queryDatabaseForUfOfProposal con, proposal
+  def queryDatabaseUfOfProposal con, proposal
     sql = getSQL proposal
     result = con.execute sql
+    puts result.inspect unless result.is_a? TinyTds::Result
     row = result.first
+    result.cancel
     if row.nil?
       nil
     else
@@ -81,29 +97,59 @@ module ProcessadorDePendencias
     end
   end
   
-  def findUfOfEachProposal(proposals, progress_keeper=nil)
-    con = createDatabaseConnection
-    raise "Não foi possível acessar o banco de dados" unless con
-    failed_proposals = Array.new
-    response = proposals.collect do |proposal_number|
-      uf = queryDatabaseForUfOfProposal con, proposal_number
-      progress_keeper.progress += 1 unless progress_keeper.nil?
-      if uf.nil?
-        failed_proposals << proposal_number unless uf
-        next
-      else
-        [proposal_number, uf]
-      end      
+  def findUfOfEachProposal(proposals_and_typers, progress_keeper=nil, num_connections=15)
+    begin
+      con_pool = ConnectionPool.new(size: num_connections, timeout: 10*60) { createDatabaseConnection }
+      raise "Não foi possível acessar o banco de dados" unless con_pool
+      mutex = Mutex.new
+      
+      threadLog = Logger.new STDOUT
+      threadLog.formatter = proc do |severity, datetime, progname, msg|
+        "Thread #{Thread.current.object_id} | #{msg}\n"
+      end
+      
+      failed_proposals = Concurrent::Array.new
+      response = Concurrent::Hash.new
+      threads = Concurrent::Array.new
+      
+      proposals_and_typers.each do |proposal_number, typer|
+        threads << Thread.new do
+          uf = nil
+          con_pool.with do |con|
+            if response.include?(proposal_number) or failed_proposals.include?(proposal_number)
+              Thread.current.terminate
+            else
+              uf = queryDatabaseUfOfProposal con, proposal_number
+            end
+          end
+          
+          if uf
+            response[proposal_number] = [uf, typer]
+          else
+            failed_proposals << proposal_number
+          end
+          mutex.synchronize {progress_keeper.progress += 1 unless progress_keeper.nil?}
+        end
+      end
+    ensure
+      puts "Waiting processing of proposals"
+      threads.each(&:join) unless threads.nil?
+      puts "Threads finished"
+      con_pool.shutdown { |con| con.close } unless con_pool.nil?
+      puts "Connections closed"
     end
-    con.close
-    return response.reject {|v| v.nil?}, failed_proposals
+    return [response.collect {|i| i.flatten}, failed_proposals]
   end
   
   def recoverProposalNumbersAndStateOfProposals(file, bank, progress_keeper=nil)
-    proposals = acquireListOfProposals file, bank
-    if proposals.empty? then raise "Nenhuma proposta localizada" end
-    progress_keeper.total = proposals.length unless progress_keeper.nil?
-    findUfOfEachProposal proposals, progress_keeper
+    proposals_and_typers = acquireListOfProposals file, bank
+    if proposals_and_typers.empty?
+      raise "Nenhuma proposta localizada"
+    else
+      puts "Total number of proposals: #{proposals_and_typers.length}"
+    end
+    progress_keeper.total = proposals_and_typers.length unless progress_keeper.nil?
+    findUfOfEachProposal proposals_and_typers, progress_keeper
   end
 end
 
