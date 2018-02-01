@@ -60,6 +60,13 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     @table.editable = false
     #@table.setColumnText 0, "Proposta"
     #@table.setColumnText 1, "UF"
+    
+    @warnings = Array.new
+    @errors = Array.new
+    getApp.addChore(:repeat => true) do
+      FXMessageBox::warning self, MBOX_OK, "   Algo deu errado...", @warnings.pop unless @warnings.empty?
+      FXMessageBox::error self, MBOX_OK, "   Algo deu errado...", @errors.pop unless @errors.empty?
+    end
   end
   
   def create
@@ -93,14 +100,14 @@ class ProcessadorDePendenciasGUI < FXMainWindow
         processedProposals, failedProposals = recoverProposalNumbersAndStateOfProposals(filename, @bank_select.current.to_s, @progress_keeper)
         puts "Done processing proposals, proposals found: #{processedProposals.length - 1}, failed proposals: #{failedProposals.length}"
         unless failedProposals.empty?
-          #failedProposalsMessage = "As seguintes propostas não puderam ser localizadas:\n\n" + failedProposals.each_slice(4).collect{|s| s.join("       ")}.join("\n")
-          #window.showWarning failedProposalsMessage
+          failedProposalsMessage = "#{failedProposals.length} não puderam ser localizadas"
+          @warnings << failedProposalsMessage
           failedProposalsMessage = "As seguintes propostas não puderam ser localizadas: " + failedProposals.join(", ")
           @logger.info failedProposalsMessage
         end
         insertProcessedProposalsToTable processedProposals
-      #rescue RuntimeError => err
-        #window.showError err.message
+      rescue RuntimeError => err
+        @errors << err.message
       rescue Exception => exception
         @logger.error exception
         raise exception
@@ -122,14 +129,6 @@ class ProcessadorDePendenciasGUI < FXMainWindow
         processSpreadsheet dialog.filename
       end
     end
-  end
-  
-  def showError msg
-    FXMessageBox::error window, MBOX_OK, "   Algo deu errado...", msg
-  end
-  
-  def showWarning msg
-    FXMessageBox::warning window, MBOX_OK, "   Algo deu errado...", msg
   end
 end
 
