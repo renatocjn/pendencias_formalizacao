@@ -13,15 +13,21 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     Thread.abort_on_exception=true
     # Invoke base class initialize first
     super(app, "Processador de pendencias", opts: DECOR_ALL)
-    @logger = Logger.new 'processador_de_pendencias.log', "weekly"
+    
+    @errorLog = Logger.new 'erros.log', 10
+    @missingProposalsLog = Logger.new 'Propostas não encontradas.log', "daily"
+    @missingProposalsLog.formatter = proc do |severity, datetime, progname, msg|
+      " #{datetime.strftime("%d/%m/%Y %H:%M:%S")} | #{msg}\n"
+    end
     @elements = Array.new 
     
     #Create a tooltip
     FXToolTip.new(self.getApp())
   
-    #Controls on top
+  
+    ### Controls on top
     controls = FXVerticalFrame.new(self, LAYOUT_SIDE_TOP|LAYOUT_FILL_X,
-      padLeft: 40, padRight: 40, padTop: 10, padBottom: 10)
+      padLeft: 30, padRight: 30, padTop: 10, padBottom: 10)
   
     @elements << controlGroup = FXGroupBox.new(controls, "Selecione o banco sendo processado", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
     @elements << optionsPopup = FXPopup.new(controlGroup)
@@ -35,38 +41,42 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     @selectSpreadsheetBttn = FXButton.new(controlGroup, "Selecionar planilha", opts: LAYOUT_FILL_X|FRAME_THICK|FRAME_RIDGE|BUTTON_DEFAULT)
     setupSelectSpreadsheetBttn
   
-    @elements << FXLabel.new(self, "contato: helpdesk@casebras.com.br", opts: JUSTIFY_RIGHT|LAYOUT_SIDE_BOTTOM)
+    @elements << FXLabel.new(self, "contato: helpdesk@casebras.com.br", opts: JUSTIFY_CENTER_X|LAYOUT_SIDE_BOTTOM)
     @elements << FXHorizontalSeparator.new(self, LAYOUT_SIDE_BOTTOM|LAYOUT_FILL_X|SEPARATOR_GROOVE)
-  
-    #footer = FXVerticalFrame.new(self, LAYOUT_SIDE_BOTTOM|LAYOUT_FILL_X,
-    #  padLeft: 40, padRight: 40, padTop: 10, padBottom: 10)
-     
-    #FXButton.new(footer, "Copiar para área de transferência", opts: LAYOUT_SIDE_BOTTOM|FRAME_THICK|FRAME_RIDGE|LAYOUT_FILL_X).connect(SEL_COMMAND) do 
-    #  excelFriendlyContent = String.new
-    #  @table.numRows.times { |r| excelFriendlyContent += "#{@table.getItemText(r,0)}\t#{@table.getItemText(r,1)}\t#{@table.getItemText(r,2)}\n" }
-    #  Clipboard.copy excelFriendlyContent
-    #end
     
-    # Contents
-    @elements << contents = FXHorizontalFrame.new(self,
-      LAYOUT_CENTER_X|FRAME_NONE|LAYOUT_FILL_X|LAYOUT_FILL_Y, :padding => 10)
-     
-    @table = FXTable.new(contents, opts: LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL_X|LAYOUT_FILL_Y|TABLE_COL_SIZABLE)
     
-    #@table.borderColor = FXRGB(255, 255, 255)
-    @table.visibleRows = 10
-    @table.visibleColumns = 3
-    @table.setTableSize 10, 3
-    @table.editable = false
-    #@table.setColumnText 0, "Proposta"
-    #@table.setColumnText 1, "UF"
+    ### Tables
     
-    @warnings = Array.new
-    @errors = Array.new
-    getApp.addChore(:repeat => true) do
-      FXMessageBox::warning self, MBOX_OK, "   Algo deu errado...", @warnings.pop unless @warnings.empty?
-      FXMessageBox::error self, MBOX_OK, "   Algo deu errado...", @errors.pop unless @errors.empty?
+    @elements << failedProposalsFrame = FXVerticalFrame.new(self, LAYOUT_SIDE_RIGHT|FRAME_NONE|LAYOUT_FILL_Y, padRight: 30, padLeft: 10)    
+    @elements << box = FXGroupBox.new(failedProposalsFrame, "Propostas não encontradas", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_FILL_Y|LAYOUT_FILL_X, padding: 10)
+    
+    @failedProposalsTable = nil
+    @elements << FXButton.new(box, "Copiar para área de transferência", opts: LAYOUT_SIDE_BOTTOM|FRAME_THICK|FRAME_RIDGE|LAYOUT_FILL_X).connect(SEL_COMMAND) do 
+      copyContentsOfTable @failedProposalsTable
     end
+    
+    @failedProposalsTable = FXTable.new(box, opts: LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL_X|LAYOUT_FILL_Y|TABLE_COL_SIZABLE)
+    @failedProposalsTable.rowHeaderWidth = 30
+    @failedProposalsTable.visibleRows = 3
+    @failedProposalsTable.visibleColumns = 1
+    @failedProposalsTable.setTableSize 100000, 1
+    @failedProposalsTable.editable = false
+   
+    
+    @elements << processedProposalsFrame = FXVerticalFrame.new(self, LAYOUT_SIDE_LEFT|FRAME_NONE|LAYOUT_FILL_Y|LAYOUT_FILL_X, padLeft: 30, padRight: 10)
+    @elements << box = FXGroupBox.new(processedProposalsFrame, "Propostas encontradas", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_FILL_Y|LAYOUT_FILL_X, padding: 10)
+    
+    @processedProposalsTable = nil
+    @elements << FXButton.new(box, "Copiar para área de transferência", opts: LAYOUT_SIDE_BOTTOM|FRAME_THICK|FRAME_RIDGE|LAYOUT_FILL_X).connect(SEL_COMMAND) do 
+      copyContentsOfTable @processedProposalsTable
+    end
+    
+    @processedProposalsTable = FXTable.new(box, opts: LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL_X|LAYOUT_FILL_Y|TABLE_COL_SIZABLE)
+    @processedProposalsTable.rowHeaderWidth = 30
+    @processedProposalsTable.visibleRows = 10
+    @processedProposalsTable.visibleColumns = 3
+    @processedProposalsTable.setTableSize 100000, 3
+    @processedProposalsTable.editable = false
   end
   
   def create
@@ -74,18 +84,20 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     show(PLACEMENT_SCREEN)
   end
   
-  def insertProcessedProposalsToTable (processedProposals)
+  def insertProcessedProposalsToTable (processedProposals, failedProposals)
     if processedProposals.empty?
-      @table.setTableSize 1,3
+      @processedProposalsTable.setTableSize 1,3
     else
-      @table.setTableSize processedProposals.length, processedProposals.collect(&:length).max
+      @processedProposalsTable.setTableSize(processedProposals.length, processedProposals.collect(&:length).max)
     end
-    
-    processedProposals.each_with_index do |(proposal, uf, *other_values), idx|
-      @table.setItemText(idx,0, proposal.to_s)
-      @table.setItemText(idx,1, uf.to_s)
-      other_values.each_with_index { |v, i| @table.setItemText(idx,2+i, v.to_s) }
+    processedProposals.each_with_index do |values, idx|
+      values.each_with_index do |v, i| 
+        @processedProposalsTable.setItemText(idx,i, v.to_s) 
+      end
     end
+    rowNumber = if failedProposals.empty? then 1 else failedProposals.length end
+    @failedProposalsTable.setTableSize rowNumber, 1
+    failedProposals.each_with_index {|p, i| @failedProposalsTable.setItemText(i,0, p.to_s)}
   end
   
   def processSpreadsheet filename
@@ -99,18 +111,23 @@ class ProcessadorDePendenciasGUI < FXMainWindow
         puts "Starting main process thread"
         processedProposals, failedProposals = recoverProposalNumbersAndStateOfProposals(filename, @bank_select.current.to_s, @progress_keeper)
         puts "Done processing proposals, proposals found: #{processedProposals.length - 1}, failed proposals: #{failedProposals.length}"
+        
         unless failedProposals.empty?
-          failedProposalsMessage = "#{failedProposals.length} não puderam ser localizadas"
-          @warnings << failedProposalsMessage
           failedProposalsMessage = "As seguintes propostas não puderam ser localizadas: " + failedProposals.join(", ")
-          @logger.info failedProposalsMessage
+          @missingProposalsLog.info failedProposalsMessage
         end
-        insertProcessedProposalsToTable processedProposals
+        
+        insertProcessedProposalsToTable processedProposals, failedProposals
+          
+        doneMessage = "#{processedProposals.length - 1} propostas encontradas"
+        doneMessage += " e #{failedProposals.length} propostas não puderam ser localizadas" unless failedProposals.empty?
+        getApp.addChore {FXMessageBox::warning self, MBOX_OK, "   Algo deu errado...", doneMessage}
       rescue RuntimeError => err
-        @errors << err.message
+        @errorLog.error err
+        getApp.addChore {FXMessageBox::error self, MBOX_OK, "   Algo deu errado...", err.message}
       rescue Exception => exception
-        @logger.error exception
-        raise exception
+        @errorLog.error exception
+        getApp.addChore {FXMessageBox::warning self, MBOX_OK, "   Algo deu errado...", "Algo muito errado aconteceu, favor entre em contato com a equipe de suporte!"}
       ensure
         setupSelectSpreadsheetBttn
         @progress_keeper.progress = @progress_keeper.total = 0
@@ -129,6 +146,20 @@ class ProcessadorDePendenciasGUI < FXMainWindow
         processSpreadsheet dialog.filename
       end
     end
+  end
+  
+  def copyContentsOfTable table
+    excelFriendlyContent = String.new
+    nRows = table.getNumRows
+    nCols = table.getNumColumns
+    nRows.times do |r|
+      arr = Array.new
+      nCols.times do |c|
+        arr << table.getItemText(r,c)
+      end
+      excelFriendlyContent += arr.join("\t") + "\n"
+    end
+    Clipboard.copy excelFriendlyContent.strip
   end
 end
 

@@ -91,8 +91,9 @@ module ProcessadorDePendencias
           columns_array << [p[1..-3], t]
         elsif p.is_integer?
           columns_array << [p.to_i.to_s, t] #Remove trailing zeroes (BANRISUL)
-        else
-          columns_array << [p.gsub(/(<[^>]*>)|\n|\t/s) {" "}, t]
+        else #Header line
+          tag_regexp = /(<[^>]*>)|\n|\t/
+          columns_array << [p.gsub(tag_regexp, " ").split.join(" "), t.collect{|h| h.to_s.gsub(tag_regexp, " ").split.join(" ")}]
         end
       end
     end
@@ -113,7 +114,7 @@ module ProcessadorDePendencias
       WHERE PE.NUM_PROPOSTA = '#{proposal}' OR PE.NUM_CONTRATO = '#{proposal}'"
   end
   
-  def queryDatabaseUfOfProposal con, proposal
+  def queryDatabaseForProposal con, proposal
     sql = getSQL proposal
     result = con.execute sql
     row = result.first
@@ -123,14 +124,16 @@ module ProcessadorDePendencias
     else
       uf = row["SGL_UNIDADE_EMPRESA"]
       uf = uf.nil? ? row["SGL_UNIDADE_FEDERACAO"] : uf
-      uf = uf.nil? ? row["NOM_UNIDADE_EMPRESA"].split.first : uf
-      uf = uf.nil? ? row["NOM_FANTASIA"].split.first : uf
+      nome_loja = row["NOM_UNIDADE_EMPRESA"]
+      nome_loja = nome_loja.nil? ? row["NOM_FANTASIA"] : nome_loja
+      return [uf, nome_loja]
     end
   end
   
   def findUfOfEachProposal(full_data, progress_keeper=nil, num_connections=15)
+    thread_pool = Concurrent::FixedThreadPool.new(2*num_connections, fallback_policy: :discard)
+    con_pool = ConnectionPool.new(size: num_connections, timeout: 10*60) { createDatabaseConnection }
     begin
-      con_pool = ConnectionPool.new(size: num_connections, timeout: 10*60) { createDatabaseConnection }
       raise "Não foi possível acessar o banco de dados" unless con_pool
       mutex = Mutex.new
       
@@ -141,17 +144,19 @@ module ProcessadorDePendencias
       
       failed_proposals = Concurrent::Array.new
       response = Concurrent::Array.new
-      threads = Concurrent::Array.new
       
+      header_not_captured = true
       full_data.each do |proposal_number, other_columns|
         if proposal_number.is_integer?
-          threads << Thread.new do
+          thread_pool.post do
             uf = nil
+            nome_loja = nil
             con_pool.with do |con|
-              uf = queryDatabaseUfOfProposal con, proposal_number
+              uf, nome_loja = queryDatabaseForProposal con, proposal_number
             end
             
             if uf
+              other_columns.insert(0, nome_loja)
               other_columns.insert(0, uf)
               other_columns.insert(0, proposal_number)
               response << other_columns
@@ -161,17 +166,24 @@ module ProcessadorDePendencias
             mutex.synchronize {progress_keeper.progress += 1 unless progress_keeper.nil?}
           end
         else
+          other_columns.insert(0, "Nome loja Workbank")
           other_columns.insert(0, "Workbank UF")
           other_columns.insert(0, "Proposta/Contrato")
           response << other_columns
-          mutex.synchronize {progress_keeper.progress += 1 unless progress_keeper.nil?}
+          mutex.synchronize do 
+            progress_keeper.progress += 1 unless progress_keeper.nil?
+            raise "Erro ao encontrar propostas... \n Altere o nome da planilha ou selecione o banco correto acima" unless header_not_captured
+            header_not_captured = false
+          end
         end
       end
     ensure
       puts "Waiting processing of proposals"
-      threads.each(&:join) unless threads.nil?
+      
+      thread_pool.shutdown
+      thread_pool.wait_for_termination
       puts "Threads finished"
-      con_pool.shutdown { |con| con.close } unless con_pool.nil?
+      con_pool.shutdown { |con| con.close }
       puts "Connections closed"
     end
     return [response.collect {|i| i.flatten}, failed_proposals]
@@ -179,7 +191,7 @@ module ProcessadorDePendencias
   
   def recoverProposalNumbersAndStateOfProposals(file, bank, progress_keeper=nil)
     full_data = acquireListOfProposalsAndColumns file, bank
-    if full_data.length == 1
+    if full_data.one? == 1
       raise "Nenhuma proposta localizada"
     else
       puts "Total number of proposals: #{full_data.length - 1}" #Remove header line
