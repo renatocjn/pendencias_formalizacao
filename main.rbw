@@ -57,9 +57,9 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     
     @failedProposalsTable = FXTable.new(box, opts: LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL_X|LAYOUT_FILL_Y|TABLE_COL_SIZABLE)
     @failedProposalsTable.rowHeaderWidth = 30
-    @failedProposalsTable.visibleRows = 3
+    @failedProposalsTable.visibleRows = 10
     @failedProposalsTable.visibleColumns = 1
-    @failedProposalsTable.setTableSize 100000, 1
+    @failedProposalsTable.setTableSize 100, 1
     @failedProposalsTable.editable = false
    
     
@@ -75,7 +75,7 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     @processedProposalsTable.rowHeaderWidth = 30
     @processedProposalsTable.visibleRows = 10
     @processedProposalsTable.visibleColumns = 3
-    @processedProposalsTable.setTableSize 100000, 3
+    @processedProposalsTable.setTableSize 20, 3
     @processedProposalsTable.editable = false
   end
   
@@ -90,14 +90,14 @@ class ProcessadorDePendenciasGUI < FXMainWindow
     else
       @processedProposalsTable.setTableSize(processedProposals.length, processedProposals.collect(&:length).max)
     end
-    processedProposals.each_with_index do |values, idx|
-      values.each_with_index do |v, i| 
-        @processedProposalsTable.setItemText(idx,i, v.to_s) 
+    processedProposals.each_with_index do |values, i|
+      values.each_with_index do |v, j| 
+        @processedProposalsTable.setItemText(i,j, v.to_s.strip) 
       end
     end
     rowNumber = if failedProposals.empty? then 1 else failedProposals.length end
     @failedProposalsTable.setTableSize rowNumber, 1
-    failedProposals.each_with_index {|p, i| @failedProposalsTable.setItemText(i,0, p.to_s)}
+    failedProposals.each_with_index {|p, i| @failedProposalsTable.setItemText(i,0, p.to_s.strip)}
   end
   
   def processSpreadsheet filename

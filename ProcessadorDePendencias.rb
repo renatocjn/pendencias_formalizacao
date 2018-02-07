@@ -1,8 +1,12 @@
 class String
   def is_integer?
-    self =~ /^[-+]?([0-9]*)?$/
+     /^[0-9]+$/ =~ self.strip
   end
 
+  def blank?
+    self.empty?
+  end
+  
   def remover_acentuacao
     self.tr( "ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčÐðĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĸĹĺĻļĽľĿŀŁłÑñŃńŅņŇňŉŊŋÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšſŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽž",
              "AAAAAAaaaaaaAaAaAaCcCcCcCcCcDdDdDdEEEEeeeeEeEeEeEeEeGgGgGgGgHhHhIIIIiiiiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnNnnNnOOOOOOooooooOoOoOoRrRrRrSsSsSsSssTtTtTtUUUUuuuuUuUuUuUuUuUuWwYyyYyYZzZzZz")
@@ -41,7 +45,11 @@ module ProcessadorDePendencias
       require "roo"
     end
     
-    Roo::Spreadsheet.open(filename)
+    begin
+      Roo::Spreadsheet.open(filename)
+    rescue StandardError
+      raise "Erro ao abrir a planilha, feche a planilha caso ela já esteja aberta"
+    end
   end
   
   def getSpreadSheetColumnNames filename
@@ -77,6 +85,7 @@ module ProcessadorDePendencias
     other_columns = (spreadsheet.first_column..spreadsheet.last_column).each_with_object(Array.new) do |column_idx, column_list|
       column_list << spreadsheet.column(column_idx) unless column_idx == (proposals_column_number.ord - "A".ord + 1) #converts proposals_column_number to integer index of column"
     end
+    
     spreadsheet.close
     columns = proposals.zip(other_columns.transpose)
     columns.each_with_object(Array.new) do |(p, t), columns_array|
@@ -93,7 +102,7 @@ module ProcessadorDePendencias
           columns_array << [p.to_i.to_s, t] #Remove trailing zeroes (BANRISUL)
         else #Header line
           tag_regexp = /(<[^>]*>)|\n|\t/
-          columns_array << [p.gsub(tag_regexp, " ").split.join(" "), t.collect{|h| h.to_s.gsub(tag_regexp, " ").split.join(" ")}]
+          columns_array << [p.gsub(tag_regexp, " ").split.join(" "), t.collect{|h| h.to_s.gsub(tag_regexp, " ").split.join(" ")}] #Remover tags html
         end
       end
     end
@@ -107,82 +116,84 @@ module ProcessadorDePendencias
     end 
   end
   
-  def getSQL proposal
+  def getSqlFor proposal
     "SELECT UE.SGL_UNIDADE_EMPRESA, UE.SGL_UNIDADE_FEDERACAO, UE.NOM_UNIDADE_EMPRESA, UE.NOM_FANTASIA
-      FROM [CBDATA].[dbo].[PROPOSTA_EMPRESTIMO] AS PE
+      FROM [CBDATA].[dbo].[VW_PROPOSTA_CONSULTA] AS PE
         INNER JOIN [CBDATA].[dbo].[UNIDADE_EMPRESA] AS UE ON UE.COD_UNIDADE_EMPRESA = PE.COD_UNIDADE_EMPRESA
-      WHERE PE.NUM_PROPOSTA = '#{proposal}' OR PE.NUM_CONTRATO = '#{proposal}'"
+      WHERE PE.PROPOSTA = '#{proposal}' OR PE.CONTRATO = '#{proposal}'"
   end
   
   def queryDatabaseForProposal con, proposal
-    sql = getSQL proposal
+    sql = getSqlFor proposal
     result = con.execute sql
     row = result.first
     result.cancel
     if row.nil?
       nil
     else
-      uf = row["SGL_UNIDADE_EMPRESA"]
-      uf = uf.nil? ? row["SGL_UNIDADE_FEDERACAO"] : uf
       nome_loja = row["NOM_UNIDADE_EMPRESA"]
-      nome_loja = nome_loja.nil? ? row["NOM_FANTASIA"] : nome_loja
+      if nome_loja.nil? then nome_loja = row["NOM_FANTASIA"] end
+      
+      uf = row["SGL_UNIDADE_EMPRESA"]
+      if uf.nil? then uf = row["SGL_UNIDADE_FEDERACAO"] end
+      
+      ufs_brasil = %w(AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO)
+      uf_from_nome_loja = nome_loja.to_s.split.first
+      if uf.nil? and ufs_brasil.include?(uf_from_nome_loja) then uf = uf_from_nome_loja end
       return [uf, nome_loja]
     end
   end
   
-  def findUfOfEachProposal(full_data, progress_keeper=nil, num_connections=15)
-    thread_pool = Concurrent::FixedThreadPool.new(2*num_connections, fallback_policy: :discard)
+  def findUfOfEachProposal(full_data, progress_keeper=nil, num_connections=30)
     con_pool = ConnectionPool.new(size: num_connections, timeout: 10*60) { createDatabaseConnection }
-    begin
-      raise "Não foi possível acessar o banco de dados" unless con_pool
-      mutex = Mutex.new
-      
-      threadLog = Logger.new STDOUT
-      threadLog.formatter = proc do |severity, datetime, progname, msg|
-        "Thread #{Thread.current.object_id} | #{msg}\n"
-      end
-      
-      failed_proposals = Concurrent::Array.new
-      response = Concurrent::Array.new
-      
+    thread_pool = Concurrent::FixedThreadPool.new(2*num_connections, fallback_policy: :discard)
+    failed_proposals = Concurrent::Array.new
+    response = Concurrent::Array.new
+    mutex = Mutex.new
+    
+    total = integer = posted = failed =  0
+    begin 
       header_not_captured = true
       full_data.each do |proposal_number, other_columns|
+        total += 1
         if proposal_number.is_integer?
           thread_pool.post do
-            uf = nil
-            nome_loja = nil
+            uf = nome_loja = nil
             con_pool.with do |con|
+              posted += 1
               uf, nome_loja = queryDatabaseForProposal con, proposal_number
             end
-            
-            if uf
-              other_columns.insert(0, nome_loja)
-              other_columns.insert(0, uf)
+            if uf or nome_loja
+              integer += 1
               other_columns.insert(0, proposal_number)
-              response << other_columns
+              other_columns.insert(1, uf)
+              other_columns.insert(2, nome_loja)
+              response.push other_columns
             else
-              failed_proposals << proposal_number unless failed_proposals.include?(proposal_number)
+              failed += 1
+              failed_proposals.push proposal_number unless failed_proposals.include? proposal_number
             end
-            mutex.synchronize {progress_keeper.progress += 1 unless progress_keeper.nil?}
+            mutex.synchronize {progress_keeper.progress += 1} unless progress_keeper.nil?
           end
         else
-          other_columns.insert(0, "Nome loja Workbank")
-          other_columns.insert(0, "Workbank UF")
+          next if proposal_number.strip == "-" #Blank proposal
           other_columns.insert(0, "Proposta/Contrato")
-          response << other_columns
+          other_columns.insert(1, "UF Workbank")
+          other_columns.insert(2, "Loja Workbank")
+          response.push other_columns
           mutex.synchronize do 
             progress_keeper.progress += 1 unless progress_keeper.nil?
-            raise "Erro ao encontrar propostas... \n Altere o nome da planilha ou selecione o banco correto acima" unless header_not_captured
+            raise "Erro ao encontrar propostas... Altere o nome da planilha ou selecione o banco correto acima" unless header_not_captured
             header_not_captured = false
           end
         end
       end
     ensure
       puts "Waiting processing of proposals"
-      
       thread_pool.shutdown
       thread_pool.wait_for_termination
       puts "Threads finished"
+      
       con_pool.shutdown { |con| con.close }
       puts "Connections closed"
     end
