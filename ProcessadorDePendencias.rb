@@ -20,6 +20,7 @@ module ProcessadorDePendencias
   
   BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS = {
    #"bank_name"  => ["proposal_column", "typer_column"],
+    "primeira coluna" => "A",
     "teste" => "E",
     "help"  => "E",
     "ole"   => "H",
@@ -65,7 +66,7 @@ module ProcessadorDePendencias
     if bank_keys.include? bank
       puts "Bank: #{bank}"
       return BANK_TO_SPREADSHEET_COLUMN_NUMBER_OF_PROPOSALS[bank]
-    else
+    else # Deteção automática
       file_basename = File.basename(filename).remover_acentuacao.downcase
       bank_keys.each do |k|
         if file_basename.include? k 
@@ -117,7 +118,7 @@ module ProcessadorDePendencias
   end
   
   def getSqlFor proposal
-    "SELECT UE.SGL_UNIDADE_EMPRESA, UE.SGL_UNIDADE_FEDERACAO, UE.NOM_UNIDADE_EMPRESA, UE.NOM_FANTASIA
+    "SELECT top(2) UE.SGL_UNIDADE_EMPRESA, UE.SGL_UNIDADE_FEDERACAO, UE.NOM_UNIDADE_EMPRESA, UE.NOM_FANTASIA
       FROM [CBDATA].[dbo].[VW_PROPOSTA_CONSULTA] AS PE
         INNER JOIN [CBDATA].[dbo].[UNIDADE_EMPRESA] AS UE ON UE.COD_UNIDADE_EMPRESA = PE.COD_UNIDADE_EMPRESA
       WHERE PE.PROPOSTA = '#{proposal}' OR PE.CONTRATO = '#{proposal}'"
@@ -126,8 +127,11 @@ module ProcessadorDePendencias
   def queryDatabaseForProposal con, proposal
     sql = getSqlFor proposal
     result = con.execute sql
-    row = result.first
+    rows = result.each
+    return nil unless rows.one?
     result.cancel
+    
+    row = rows.first
     if row.nil?
       nil
     else
@@ -151,26 +155,21 @@ module ProcessadorDePendencias
     response = Concurrent::Array.new
     mutex = Mutex.new
     
-    total = integer = posted = failed =  0
     begin 
       header_not_captured = true
       full_data.each do |proposal_number, other_columns|
-        total += 1
         if proposal_number.is_integer?
           thread_pool.post do
             uf = nome_loja = nil
             con_pool.with do |con|
-              posted += 1
               uf, nome_loja = queryDatabaseForProposal con, proposal_number
             end
             if uf or nome_loja
-              integer += 1
               other_columns.insert(0, proposal_number)
               other_columns.insert(1, uf)
               other_columns.insert(2, nome_loja)
               response.push other_columns
             else
-              failed += 1
               failed_proposals.push proposal_number unless failed_proposals.include? proposal_number
             end
             mutex.synchronize {progress_keeper.progress += 1} unless progress_keeper.nil?

@@ -31,7 +31,7 @@ class ProcessadorDePendenciasGUI < FXMainWindow
   
     @elements << controlGroup = FXGroupBox.new(controls, "Selecione o banco sendo processado", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
     @elements << optionsPopup = FXPopup.new(controlGroup)
-    ["Detecção automática", "Itaú", "OLÉ", "HELP", "INTERMED EMPREST", "INTERMED CART", "Daycoval", "Centelem", "Bradesco", "CCB", "Bons", "Safra", "Sabemi", "PAN Consignado", "PAN Cartão", "Banrisul"].each { |opt| FXOption.new(optionsPopup, opt) }
+    ["Detecção automática", "Propostas na primeira coluna", "Itaú", "OLÉ", "HELP", "INTERMED EMPREST", "INTERMED CART", "Daycoval", "Centelem", "Bradesco", "CCB", "Bons", "Safra", "Sabemi", "PAN Consignado", "PAN Cartão", "Banrisul"].each { |opt| FXOption.new(optionsPopup, opt) }
     @bank_select = FXOptionMenu.new controlGroup, optionsPopup, opts: FRAME_THICK|FRAME_RAISED|ICON_BEFORE_TEXT|LAYOUT_FILL_X
     
     @elements << controlGroup = FXGroupBox.new(controls, "Selecione a planilha a ser processada", GROUPBOX_TITLE_CENTER|FRAME_RIDGE|LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
@@ -116,9 +116,9 @@ class ProcessadorDePendenciasGUI < FXMainWindow
           failedProposalsMessage = "As seguintes propostas não puderam ser localizadas: " + failedProposals.join(", ")
           @missingProposalsLog.info failedProposalsMessage
         end
-        
+
         insertProcessedProposalsToTable processedProposals, failedProposals
-          
+
         doneMessage = "#{processedProposals.length - 1} propostas encontradas"
         doneMessage += " e #{failedProposals.length} propostas não puderam ser localizadas" unless failedProposals.empty?
         getApp.addChore {FXMessageBox::warning self, MBOX_OK, "   Algo deu errado...", doneMessage}
@@ -150,14 +150,12 @@ class ProcessadorDePendenciasGUI < FXMainWindow
   
   def copyContentsOfTable table
     excelFriendlyContent = String.new
-    nRows = table.getNumRows
-    nCols = table.getNumColumns
-    nRows.times do |r|
+    table.getNumRows.times do |r|
       arr = Array.new
-      nCols.times do |c|
+      table.getNumColumns.times do |c|
         arr << table.getItemText(r,c)
       end
-      excelFriendlyContent += arr.join("\t") + "\n"
+      excelFriendlyContent += arr.collect{|s| "\"" + s.strip + "\""}.join("\t") + "\n"
     end
     Clipboard.copy excelFriendlyContent.strip
   end

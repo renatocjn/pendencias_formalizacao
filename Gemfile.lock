@@ -5,19 +5,17 @@ GEM
     concurrent-ruby (1.0.5)
     concurrent-ruby (1.0.5-java)
     connection_pool (2.2.1)
-    ffi (1.9.18-java)
-    ffi (1.9.18-x64-mingw32)
+    ffi (1.9.21-java)
+    ffi (1.9.21-x64-mingw32)
     fxruby (1.6.39)
       mini_portile2 (~> 2.1)
     fxruby (1.6.39-x64-mingw32)
       mini_portile2 (~> 2.1)
     logger (1.2.8)
     mini_portile2 (2.3.0)
-    nokogiri (1.8.1-java)
-    nokogiri (1.8.1-x64-mingw32)
+    nokogiri (1.8.2-java)
+    nokogiri (1.8.2-x64-mingw32)
       mini_portile2 (~> 2.3.0)
-    ocra (1.3.10)
-    rake (12.3.0)
     roo (2.7.1)
       nokogiri (~> 1)
       rubyzip (~> 1.1, < 2.0.0)
@@ -29,7 +27,6 @@ GEM
     rubyzip (1.2.1)
     spreadsheet (1.1.5)
       ruby-ole (>= 1.0)
-    thread (0.2.2)
     tiny_tds (2.1.1)
     tiny_tds (2.1.1-x64-mingw32)
 
@@ -39,16 +36,13 @@ PLATFORMS
 
 DEPENDENCIES
   clipboard
-  concurrent-ruby (~> 1.0)
+  concurrent-ruby
   connection_pool
   ffi
   fxruby
   logger
-  ocra
-  rake
   roo
   roo-xls
-  thread
   tiny_tds
 
 BUNDLED WITH

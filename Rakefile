@@ -2,7 +2,7 @@ require 'fileutils'
 require 'rake/clean'
 require 'zip'
 
-CLEAN.include('*.tmp', '*.log', '*.rar', '*.zip')
+CLEAN.include('*.tmp', '*.log*', '*.rar', '*.zip')
 CLOBBER.include('*.exe')
 
 DIST_FILENAME = "dist.zip"

@@ -22,12 +22,10 @@ Com estes instalados, basta clicar duas vezes no arquivo .rbw para que a tela pr
   
 ## Geração do aplicativo executável
 
-Caso seja necessário, o usuário pode criar um arquivo executável basta utilizar a gem ocra.
+Caso seja necessário, o usuário pode criar um arquivo executável basta utilizar o comando ``.
 
 1. Realizar o passo a passo de instalação desta aplicação como descrito na seção anterior (Instalação)
-2. Executar o comando `ocra main.rbw` na pasta que contem estes arquivos utilizando o terminal. A tela principal da aplicação deve abrir
-3. Para que o programa ocra encontre as dependencias da aplicação, é necessário processar uma planilha xls, xlsx e clicar no botão de "copiar para a área de transferência". A janela não deve fechar sozinha, senão será necessário recomeçar o procedimento
-4. Por último, basta fechar a tela do programa e esperar o arquivo .exe ser criado
+2. Executar o comando `rake exe:create` na pasta que contém estes arquivos utilizando o terminal.
 
 ## Manutenção
 
